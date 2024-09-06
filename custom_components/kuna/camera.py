@@ -87,7 +87,7 @@ class KunaCamera(Camera):
         }
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         attributes = {
             ATTR_SERIAL_NUMBER: self._camera.serial_number,
             ATTR_NOTIFICATIONS_ENABLED: self._camera.notifications_enabled,
@@ -97,7 +97,10 @@ class KunaCamera(Camera):
 
     def update(self):
         """Fetch state data from the updated account camera dict."""
-        self.is_streaming = True
+        #try:
+        #    self.is_streaming = True
+        #except AttributeError:
+        #    _LOGGER.warning("AttributeError: can't set is_streaming attribute.  Ignoring error.")
         try:
             self._camera = self._account.account.cameras[self._original_id]
         except KeyError:
