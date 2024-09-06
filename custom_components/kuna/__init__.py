@@ -6,6 +6,8 @@ https://github.com/marthoc/kuna
 """
 from datetime import timedelta
 import logging
+import os.path
+from datetime import datetime
 
 import voluptuous as vol
 
@@ -198,10 +200,56 @@ class KunaAccount:
                     "timestamp": recording.timestamp,
                     "duration": recording.duration,
                     "url": url,
+                    "delay_sec": 0,
                 }
-                self._hass.bus.async_fire(
-                    "{}_{}".format(DOMAIN, CONF_EVENT), event_data
+                
+                # delay very recently created recordings to allow processing to complete before downloading
+                if "-0400" in recording.label:
+                    recTime = datetime.strptime(recording.label.replace("-0400",""), "%Y_%m_%d__%H_%M_%S")
+                elif "-0500" in recording.label:
+                    recTime = datetime.strptime(recording.label.replace("-0500",""), "%Y_%m_%d__%H_%M_%S")
+                timeNow = datetime.now()
+                timeDiff = int((timeNow - recTime).total_seconds())
+                isRecent = timeDiff <= 300
+                
+                # skip recordings that have already been downloaded
+                filename1 = '/config/downloads/kuna_front_door/' + recording.label + '_front_door.mp4'
+                filename2 = '/config/downloads/kuna_garage/' + recording.label + '_garage.mp4'
+                
+                isExistingFrontDoor = os.path.isfile(filename1)
+                isExistingGarage = os.path.isfile(filename2)
+                
+                _LOGGER.info("Found recording: {} with timestamp {} at current time {} with time difference {} seconds".format(
+                    recording.label, recTime, timeNow, timeDiff
+                    )
                 )
+                
+                if isExistingFrontDoor:
+                    _LOGGER.info("Front Door recording already exists.")
+                
+                if isExistingGarage:
+                    _LOGGER.info("Garage recording already exists.")
+                    
+                if isRecent:
+                    event_data["delay_sec"] = 120
+                    _LOGGER.warning("Recording {} is recent ({} seconds old).  Downloading will be delayed by 2 minutes.".format(
+                        recording.label, timeDiff
+                        )
+                    )
+                
+                if not(isExistingFrontDoor) and not(isExistingGarage):
+                    self._hass.bus.async_fire(
+                        "{}_{}".format(DOMAIN, CONF_EVENT), event_data
+                    )
+                    _LOGGER.info("Triggering event to download Kuna recording: {} ({})".format(
+                        recording.label, recording.camera["serial_number"]
+                        )
+                    )
+                else:
+                    _LOGGER.warning("Skipping Kuna recording: {} ({})".format(
+                        recording.label, recording.camera["serial_number"]
+                        )
+                    )
             else:
                 _LOGGER.error(
                     "Error retrieving download url for Kuna recording: {} ({})".format(
